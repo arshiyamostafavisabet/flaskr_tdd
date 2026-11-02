@@ -15,3 +15,7 @@ test results after database
 
 ## Templates and Views
 
+### Show Entries
+
+### Login and Logout
+
