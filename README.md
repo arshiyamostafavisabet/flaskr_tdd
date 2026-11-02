@@ -12,3 +12,6 @@ test results after app
 test results before database
 
 test results after database
+
+## Templates and Views
+
