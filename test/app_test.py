@@ -77,7 +77,12 @@ def test_messages(client):
     assert b"<strong>HTML</strong> allowed here" in rv.data
 
 def test_delete_message(client):
-    rv = client.get('/delete/1')
+    """Ensure the messages are being deleted"""
+    rv = client.get("/delete/1")
+    data = json.loads(rv.data)
+    assert data["status"] == 0
+    login(client, app.config["USERNAME"], app.config["PASSWORD"])
+    rv = client.get("/delete/1")
     data = json.loads(rv.data)
     assert data["status"] == 1
 
