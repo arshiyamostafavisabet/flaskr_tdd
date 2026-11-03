@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 
 from project.app import app, db
+from project.models import Post
 
 TEST_DB = "test.db"
 
@@ -76,14 +77,56 @@ def test_messages(client):
     assert b"&lt;Hello&gt;" in rv.data
     assert b"<strong>HTML</strong> allowed here" in rv.data
 
-def test_delete_message(client):
-    """Ensure the messages are being deleted"""
+
+def test_login_delete(client):
+    """Ensure deleting a post requires authentication."""
+    db.session.query(Post).delete()
+    post = Post("Post to delete", "This post should be deleted after login.")
+    db.session.add(post)
+    db.session.commit()
+    assert post.id == 1
+
     rv = client.get("/delete/1")
-    data = json.loads(rv.data)
-    assert data["status"] == 0
+    assert rv.status_code == 401
+    assert json.loads(rv.data)["status"] == 0
+    assert db.session.get(Post, 1) is not None
+
     login(client, app.config["USERNAME"], app.config["PASSWORD"])
     rv = client.get("/delete/1")
-    data = json.loads(rv.data)
-    assert data["status"] == 1
+    assert rv.status_code == 200
+    assert json.loads(rv.data)["status"] == 1
+    assert db.session.get(Post, 1) is None
 
-#write the test for search
+
+def test_search(client):
+    """Ensure each search keyword only returns matching posts."""
+    login(client, app.config["USERNAME"], app.config["PASSWORD"])
+
+    titles_by_keyword = {
+        "app": ["apple 1", "apple 2"],
+        "oran": ["orange 1", "orange 2"],
+        "ban": ["banan 1", "banan 2"],
+    }
+    all_titles = [title for titles in titles_by_keyword.values() for title in titles]
+
+    for title in all_titles:
+        rv = client.post(
+            "/add",
+            data={"title": title, "text": f"Text for {title}"},
+            follow_redirects=True,
+        )
+        assert rv.status_code == 200
+
+    for keyword, matching_titles in titles_by_keyword.items():
+        rv = client.get("/search/", query_string={"query": keyword})
+        assert rv.status_code == 200
+
+        correct_count = sum(title.encode() in rv.data for title in matching_titles)
+        wrong_count = sum(
+            title.encode() in rv.data
+            for title in all_titles
+            if title not in matching_titles
+        )
+        assert correct_count == 2
+        assert rv.data.count(b'<li class="entry">') == 2
+        assert wrong_count == 0
